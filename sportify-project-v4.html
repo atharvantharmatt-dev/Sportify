@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<!--
+    SPORTIFY - Sports League Management System (student project, one file)
+
+    Three parts: 1. <style> (the turf look)  2. <body> (the pages)  3. <script> (the logic)
+
+    Project requirements and where to find them:
+      - User registration / login ........ register(), login(), tab()
+      - Role-based access (admin, captain, player) ... canEdit(), canReview(), start()
+      - Dashboard ........................ showHome() (hero, stat cards, 4 panels)
+      - CRUD (teams and matches) ......... saveTeam(), editTeam(), delTeam(), saveMatch(), editMatch(), delMatch()
+      - Search / filter .................. the search box and dropdown above each table
+      - Workflow for requests / bookings / registrations .. sendRequest(), addRequest(), setStatus()
+      - Status tracking .................. History column in the Requests table
+      - Validation ....................... the checks at the start of each save function
+      - Notifications / confirmations .... note(), showAlerts(), msg() toast
+      - Basic reports .................... showReports()
+      - Responsive UI .................... flexible boxes and tables that scroll sideways
+
+    Demo accounts: admin@sportify.com (admin123), captain@sportify.com (demo123), player@sportify.com (demo123)
+    Data is saved in the browser (localStorage).
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>
+        Sportify - Sports League Management System
+    </title>
+    <style>
+body { margin: 0; font-family: Arial, sans-serif; background: radial-gradient(#0003 1px, transparent 1.5px) 0 0 / 5px 5px, repeating-linear-gradient(90deg, #2d8a3c 0 80px, #37a047 80px 160px) fixed; }
+header { background: #0d3b1e; color: white; padding: 10px 20px; border-bottom: 4px solid white; }
+h1 { margin: 0; display: inline; margin-right: 15px; }
+nav { background: #0d3b1ecc; display: flex; flex-wrap: wrap; padding: 6px; }
+button { background: #1b7a35; color: white; border: 0; border-radius: 6px; padding: 7px 12px; margin: 2px; cursor: pointer; }
+nav button { background: none; }
+nav button:hover { background: #1b7a35; }
+.red { background: #c0392b; }
+.box { background: #fffffff2; border-radius: 10px; padding: 15px; margin: 12px auto; max-width: 1000px; overflow-x: auto; }
+label { display: block; margin: 8px 0; font-weight: bold; }
+input, select { width: 100%; padding: 8px; margin: 3px 0; box-sizing: border-box; }
+table { width: 100%; border-collapse: collapse; }
+td, th { border-bottom: 1px solid #ccc; padding: 6px; text-align: left; }
+th { background: #e8f5e9; }
+#msg { display: none; position: fixed; top: 10px; right: 10px; padding: 10px; border-radius: 8px; color: white; z-index: 9; }
+#app, .page, #regForm { display: none; }
+.Approved, .Completed { color: green; }
+.Rejected, .Cancelled { color: #c0392b; }
+.Pending { color: #d68910; }
+.page { padding: 0 8px; }
+.hero { background: linear-gradient(120deg, #0d3b1ee6, #1b7a35e6); color: white; }
+.hero h2 { margin: 0 0 5px 0; }
+.hero button { background: white; color: #0d3b1e; }
+.stats, .cols { display: grid; gap: 12px; max-width: 1000px; margin: 12px auto; }
+.stats { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.cols { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+.stat, .panel { background: #fffffff2; border-radius: 10px; padding: 15px; }
+.stat { text-align: center; cursor: pointer; border-bottom: 4px solid #1b7a35; }
+.stat b { display: block; font-size: 30px; color: #1b7a35; }
+.panel h3 { margin-top: 0; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>
+            ⚽ Sportify
+        </h1>
+        <span id="who">
+            Sports League Management System
+        </span>
+    </header>
+    <div id="msg">
+    </div>
+    <!-- LOGIN / REGISTER: only one form is shown at a time -->
+    <div id="auth" class="box">
+        <h2>
+            Play hard. Play together.
+        </h2>
+        <button onclick="tab('login')">
+            Login
+        </button>
+        <button onclick="tab('reg')">
+            Register
+        </button>
+        <form id="loginForm" onsubmit="login(); return false;">
+            <label>
+                Email
+                <input id="lemail">
+            </label>
+            <label>
+                Password
+                <input id="lpass" type="password">
+            </label>
+            <button>
+                Login
+            </button>
+            <p>
+                Demo accounts:
+            </p>
+            <button type="button" onclick="fill('admin@sportify.com','admin123')">
+                Admin
+            </button>
+            <button type="button" onclick="fill('captain@sportify.com','demo123')">
+                Captain
+            </button>
+            <button type="button" onclick="fill('player@sportify.com','demo123')">
+                Player
+            </button>
+        </form>
+        <form id="regForm" onsubmit="register(); return false;">
+            <label>
+                Full name
+                <input id="rname">
+            </label>
+            <label>
+                Email
+                <input id="remail">
+            </label>
+            <label>
+                Password (min 6 characters)
+                <input id="rpass" type="password">
+            </label>
+            <label>
+                Confirm password
+                <input id="rpass2" type="password">
+            </label>
+            <label>
+                I am a
+                <select id="rrole">
+                    <option value="player">
+                        Player
+                    </option>
+                    <option value="captain">
+                        Team Captain
+                    </option>
+                </select>
+            </label>
+            <button>
+                Create account
+            </button>
+        </form>
+    </div>
+    <!-- MAIN APP -->
+    <div id="app">
+        <nav>
+            <button data-p="home" onclick="go(this.dataset.p)">
+                🏠 Home
+            </button>
+            <button data-p="teams" onclick="go(this.dataset.p)">
+                👥 Teams
+            </button>
+            <button data-p="matches" onclick="go(this.dataset.p)">
+                🏆 Matches
+            </button>
+            <button data-p="requests" onclick="go(this.dataset.p)">
+                📝 Requests
+            </button>
+            <button data-p="reports" onclick="go(this.dataset.p)">
+                📊 Reports
+            </button>
+            <button data-p="alerts" onclick="go(this.dataset.p)">
+                🔔
+                <span id="bell">
+                </span>
+            </button>
+            <button onclick="logout()">
+                Logout
+            </button>
+        </nav>
+        <div id="p_home" class="page">
+        </div>
+        <div id="p_teams" class="page">
+            <div class="box" id="teamForm">
+                <h3>
+                    Add / edit a team
+                </h3>
+                <form onsubmit="saveTeam(); return false;">
+                    <input type="hidden" id="tid">
+                    <label>
+                        Team name
+                        <input id="tname">
+                    </label>
+                    <label>
+                        Sport
+                        <select id="tsport">
+                        </select>
+                    </label>
+                    <label>
+                        City
+                        <input id="tcity">
+                    </label>
+                    <button>
+                        Save team
+                    </button>
+                </form>
+            </div>
+            <div class="box">
+                <input id="tq" placeholder="🔍 Search teams" oninput="showTeams()">
+                <select id="ts" onchange="showTeams()">
+                </select>
+            </div>
+            <div id="teamList">
+            </div>
+        </div>
+        <div id="p_matches" class="page">
+            <div class="box" id="matchForm">
+                <h3>
+                    Add / edit a match (admin only)
+                </h3>
+                <form onsubmit="saveMatch(); return false;">
+                    <input type="hidden" id="mid">
+                    <label>
+                        Team A
+                        <select id="ma">
+                        </select>
+                    </label>
+                    <label>
+                        Team B
+                        <select id="mb">
+                        </select>
+                    </label>
+                    <label>
+                        Date
+                        <input type="date" id="mdate">
+                    </label>
+                    <label>
+                        Status
+                        <select id="mstatus">
+                        </select>
+                    </label>
+                    <label>
+                        Score A / Score B (if completed)
+                        <input type="number" id="msa" min="0">
+                        <input type="number" id="msb" min="0">
+                    </label>
+                    <button>
+                        Save match
+                    </button>
+                </form>
+            </div>
+            <div class="box">
+                <input id="mq" placeholder="🔍 Search matches" oninput="showMatches()">
+                <select id="mf" onchange="showMatches()">
+                </select>
+            </div>
+            <div id="matchList">
+            </div>
+        </div>
+        <div id="p_requests" class="page">
+            <div class="box">
+                <h3>
+                    New request
+                </h3>
+                <form onsubmit="sendRequest(); return false;">
+                    <label>
+                        Type
+                        <select id="qtype" onchange="showQForm()">
+                        </select>
+                    </label>
+                    <label>
+                        Team
+                        <select id="qteam">
+                        </select>
+                    </label>
+                    <div id="bookBox">
+                        <label>
+                            Venue
+                            <select id="qvenue">
+                            </select>
+                        </label>
+                        <label>
+                            Date
+                            <input type="date" id="qdate">
+                        </label>
+                    </div>
+                    <button>
+                        Send request
+                    </button>
+                </form>
+            </div>
+            <div class="box">
+                <input id="qq" placeholder="🔍 Search requests" oninput="showRequests()">
+                <select id="qf" onchange="showRequests()">
+                </select>
+            </div>
+            <div id="requestList">
+            </div>
+        </div>
+        <div id="p_reports" class="page">
+        </div>
+        <div id="p_alerts" class="page">
+        </div>
+    </div>
+    <script>
+// ===== DATA (saved in the browser with localStorage) =====
+var sports = ["Football", "Basketball", "Badminton", "Cricket", "Volleyball"];
+var venues = ["Main Stadium", "Court A", "Court B", "Indoor Hall"];
+var statuses = ["Pending", "Approved", "Rejected", "Cancelled", "Completed"];
+// status workflow: which status can come after which
+var next = {Pending: ["Approved", "Rejected", "Cancelled"], Approved: ["Completed", "Cancelled"]};
+var db = null, me = null;
+try { db = JSON.parse(localStorage.getItem("sportify3")); } catch (e) {}
+if (!db) {
+    db = {id: 100, login: null, requests: [], notes: [],
+        users: [
+            {id: 1, name: "Admin", email: "admin@sportify.com", pass: "admin123", role: "admin"},
+            {id: 2, name: "Captain", email: "captain@sportify.com", pass: "demo123", role: "captain"},
+            {id: 3, name: "Player", email: "player@sportify.com", pass: "demo123", role: "player"}
+        ],
+        teams: [
+            {id: 10, name: "Thunder FC", sport: "Football", city: "Downtown", captain: 2, members: [2]},
+            {id: 11, name: "Red Lions", sport: "Football", city: "Eastside", captain: 1, members: [1]}
+        ],
+        matches: [
+            {id: 20, a: 10, b: 11, date: "2026-10-10", status: "Completed", sa: "2", sb: "1"},
+            {id: 21, a: 11, b: 10, date: "2026-11-15", status: "Scheduled", sa: "", sb: ""}
+        ]};
+}
+function save() {
+    db.login = me ? me.id : null;
+    try { localStorage.setItem("sportify3", JSON.stringify(db)); } catch (e) {}
+}
+
+// ===== SMALL HELPERS =====
+function $(id) { return document.getElementById(id); }
+function val(id) { return $(id).value.trim(); }
+function today() { return new Date().toISOString().slice(0, 10); }
+function find(list, id) { return list.find(function (x) { return x.id == id; }); }
+function who(id) { var u = find(db.users, id); return u ? safe(u.name) : "?"; }
+function tn(id) { var t = find(db.teams, id); return t ? safe(t.name) : "?"; }
+function safe(text) { return String(text).replace(/[&<>"]/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); }
+
+// makes an html tag: tag("td", "hi") gives a td containing hi
+function tag(name, content, attrs) {
+    return "<" + name + (attrs ? " " + attrs : "") + ">" + content + "</" + name + ">";
+}
+function btn(label, action, css) {
+    return tag("button", label, 'onclick="' + action + '"' + (css ? ' class="' + css + '"' : ""));
+}
+// dropdown options: "Football" or ["value", "text"]
+function opts(list) {
+    return list.map(function (x) {
+        x = [].concat(x);
+        return tag("option", safe(x[x.length - 1]), 'value="' + x[0] + '"');
+    }).join("");
+}
+function all(label, list) { return opts([["", label]].concat(list)); }
+// a table inside a white box (rows is a list of lists)
+function table(heads, rows) {
+    if (!rows.length) { return tag("div", "Nothing found.", 'class="box"'); }
+    var head = tag("tr", heads.map(function (h) { return tag("th", h); }).join(""));
+    var body = rows.map(function (r) { return tag("tr", r.map(function (c) { return tag("td", c); }).join("")); }).join("");
+    return tag("div", tag("table", head + body), 'class="box"');
+}
+function msg(text, bad) {
+    var m = $("msg");
+    m.textContent = text;
+    m.style.background = bad ? "#c0392b" : "#1b7a35";
+    m.style.display = "block";
+    setTimeout(function () { m.style.display = "none"; }, 3500);
+}
+function fail(text) { msg(text, true); return false; }
+function note(uid, text) { db.notes.push({uid: uid, text: text, time: new Date().toLocaleString(), read: false}); }
+function unread() { return db.notes.filter(function (n) { return n.uid == me.id && !n.read; }).length; }
+
+// ===== LOGIN / REGISTER / LOGOUT =====
+function tab(which) {
+    $("loginForm").style.display = which == "login" ? "block" : "none";
+    $("regForm").style.display = which == "reg" ? "block" : "none";
+}
+function fill(email, pass) { $("lemail").value = email; $("lpass").value = pass; }
+
+function register() {
+    var name = val("rname"), email = val("remail").toLowerCase(), pass = $("rpass").value;
+    if (name.length < 3) { return fail("Name needs at least 3 characters."); }
+    if (!/^\S+@\S+\.\S+$/.test(email)) { return fail("Enter a valid email."); }
+    if (db.users.some(function (u) { return u.email == email; })) { return fail("Email already registered."); }
+    if (pass.length < 6) { return fail("Password needs at least 6 characters."); }
+    if (pass != $("rpass2").value) { return fail("Passwords do not match."); }
+    me = {id: db.id++, name: name, email: email, pass: pass, role: val("rrole")};
+    db.users.push(me);
+    note(me.id, "Welcome to Sportify!");
+    start();
+}
+
+function login() {
+    me = db.users.find(function (u) { return u.email == val("lemail").toLowerCase() && u.pass == $("lpass").value; }) || null;
+    if (!me) { return fail("Wrong email or password."); }
+    start();
+}
+
+function logout() {
+    me = null;
+    save();
+    $("app").style.display = "none";
+    $("auth").style.display = "block";
+    $("who").textContent = "Sports League Management System";
+    tab("login");
+}
+
+// runs after login: only shows what this role may use
+function start() {
+    save();
+    $("auth").style.display = "none";
+    $("app").style.display = "block";
+    $("who").textContent = me.name + " (" + me.role + ")";
+    $("teamForm").style.display = me.role == "player" ? "none" : "block";
+    $("matchForm").style.display = me.role == "admin" ? "block" : "none";
+    $("qtype").innerHTML = opts(me.role == "player" ? ["Join Team"] : ["Join Team", "Venue Booking"]);
+    go("home");
+    msg("Welcome, " + me.name + "! Unread notifications: " + unread());
+}
+
+// ===== PAGES =====
+var pages = {home: showHome, teams: showTeams, matches: showMatches, requests: showRequests, reports: showReports, alerts: showAlerts};
+function go(p) {
+    document.querySelectorAll(".page").forEach(function (x) { x.style.display = x.id == "p_" + p ? "block" : "none"; });
+    if (p == "matches") { $("ma").innerHTML = $("mb").innerHTML = opts(db.teams.map(function (t) { return [t.id, t.name + " (" + t.sport + ")"]; })); }
+    if (p == "requests") { showQForm(); }
+    pages[p]();
+    $("bell").textContent = unread() || "";
+}
+
+function stat(label, number, page) {
+    return tag("div", tag("b", number) + label, 'class="stat" onclick="go(\'' + page + '\')"');
+}
+function panel(title, items, empty) {
+    return tag("div", tag("h3", title) + (items.map(function (i) { return tag("p", i); }).join("") || empty), 'class="panel"');
+}
+
+function showHome() {
+    var mine = myRequests();
+    var notes = db.notes.filter(function (n) { return n.uid == me.id; });
+    var waiting = mine.filter(function (r) { return r.status == "Pending" && canReview(r); }).length;
+    // quick buttons that depend on the role
+    var links = {
+        admin: [["Add a match", "matches"], ["Review requests", "requests"]],
+        captain: [["Manage my teams", "teams"], ["Book a venue", "requests"]],
+        player: [["Find a team", "teams"], ["My requests", "requests"]]
+    }[me.role];
+    var upcoming = db.matches.filter(function (m) { return m.status == "Scheduled" && m.date >= today(); })
+        .sort(function (a, b) { return a.date > b.date ? 1 : -1; }).slice(0, 3);
+
+    $("p_home").innerHTML =
+        tag("div", tag("h2", "Welcome back, " + safe(me.name) + " 👋") +
+            tag("p", "Logged in as " + tag("b", me.role) + " · " + new Date().toDateString()) +
+            links.map(function (l) { return btn(l[0], "go('" + l[1] + "')"); }).join(""), 'class="box hero"') +
+        tag("div", stat("👥 Teams", db.teams.length, "teams") + stat("🏆 Matches", db.matches.length, "matches") +
+            stat("📝 My requests", mine.length, "requests") + stat("⏳ Need my decision", waiting, "requests") +
+            stat("🔔 Unread alerts", unread(), "alerts"), 'class="stats"') +
+        tag("div",
+            panel("📅 Upcoming matches", upcoming.map(function (m) { return m.date + ": " + tn(m.a) + " vs " + tn(m.b); }), "No upcoming matches.") +
+            panel("🛡️ My teams", db.teams.filter(function (t) { return t.members.indexOf(me.id) >= 0; }).map(function (t) { return safe(t.name) + " (" + t.sport + ")"; }), "You are not in a team yet.") +
+            panel("📝 Latest requests", mine.slice(-3).reverse().map(function (r) { return "#" + r.id + " " + r.type + " - " + tn(r.tid) + " " + tag("b", r.status, 'class="' + r.status + '"'); }), "No requests yet.") +
+            panel("🔔 Latest notifications", notes.slice(-3).reverse().map(function (n) { return (n.read ? "" : "🔵 ") + safe(n.text); }), "No notifications yet."),
+            'class="cols"');
+}
+
+// ===== TEAMS: create, read, update, delete =====
+function canEdit(t) { return me.role == "admin" || (me.role == "captain" && t.captain == me.id); }
+
+function showTeams() {
+    var q = val("tq").toLowerCase(), s = val("ts");
+    $("teamList").innerHTML = table(["Team", "Sport", "City", "Captain", "Members", "Actions"],
+        db.teams.filter(function (t) {
+            return (!s || t.sport == s) && (t.name + t.city + who(t.captain)).toLowerCase().indexOf(q) >= 0;
+        }).map(function (t) {
+            var b = "";
+            if (canEdit(t)) { b += btn("Edit", "editTeam(" + t.id + ")") + btn("Delete", "delTeam(" + t.id + ")", "red"); }
+            if (t.members.indexOf(me.id) < 0) { b += btn("Join", "addRequest({type:'Join Team', tid:" + t.id + "})"); }
+            return [safe(t.name), t.sport, safe(t.city), who(t.captain), t.members.length, b];
+        }));
+}
+
+function saveTeam() {
+    var id = val("tid"), name = val("tname"), t = find(db.teams, id);
+    if (name.length < 3 || val("tcity").length < 2) { return fail("Enter a team name (3+ letters) and a city."); }
+    if (db.teams.some(function (x) { return x.id != id && x.name.toLowerCase() == name.toLowerCase(); })) { return fail("That team name already exists."); }
+    if (id && !(t && canEdit(t))) { return fail("You are not allowed to edit this team."); }
+    if (!t) { t = {id: db.id++, captain: me.id, members: [me.id]}; db.teams.push(t); }
+    t.name = name; t.sport = val("tsport"); t.city = val("tcity");
+    $("tid").value = $("tname").value = $("tcity").value = "";
+    save(); showTeams(); msg("Team saved.");
+}
+
+function editTeam(id) {
+    var t = find(db.teams, id);
+    $("tid").value = id; $("tname").value = t.name; $("tsport").value = t.sport; $("tcity").value = t.city;
+    $("teamForm").scrollIntoView();
+}
+
+function delTeam(id) {
+    if (!confirm("Delete this team with its matches and requests?")) { return; }
+    db.teams = db.teams.filter(function (t) { return t.id != id; });
+    db.matches = db.matches.filter(function (m) { return m.a != id && m.b != id; });
+    db.requests = db.requests.filter(function (r) { return r.tid != id; });
+    save(); showTeams(); msg("Team deleted.");
+}
+
+// ===== MATCHES: create, read, update, delete (admin only) =====
+function showMatches() {
+    var q = val("mq").toLowerCase(), s = val("mf");
+    $("matchList").innerHTML = table(["Date", "Match", "Status", "Score", "Actions"],
+        db.matches.filter(function (m) {
+            return (!s || m.status == s) && (tn(m.a) + tn(m.b)).toLowerCase().indexOf(q) >= 0;
+        }).map(function (m) {
+            var b = me.role == "admin" ? btn("Edit", "editMatch(" + m.id + ")") + btn("Delete", "delMatch(" + m.id + ")", "red") : "-";
+            return [m.date, tn(m.a) + " vs " + tn(m.b), tag("b", m.status, 'class="' + m.status + '"'), m.status == "Completed" ? m.sa + " - " + m.sb : "-", b];
+        }));
+}
+
+function saveMatch() {
+    if (me.role != "admin") { return fail("Only the admin can manage matches."); }
+    var id = val("mid"), a = Number(val("ma")), b = Number(val("mb")), done = val("mstatus") == "Completed";
+    if (!a || !b || a == b) { return fail("Pick two different teams."); }
+    if (find(db.teams, a).sport != find(db.teams, b).sport) { return fail("Both teams must play the same sport."); }
+    if (!val("mdate")) { return fail("Choose a date."); }
+    if (done && (val("msa") == "" || val("msb") == "" || val("msa") < 0 || val("msb") < 0)) { return fail("Enter both scores (0 or more)."); }
+    var m = find(db.matches, id);
+    if (!m) { m = {id: db.id++}; db.matches.push(m); }
+    m.a = a; m.b = b; m.date = val("mdate"); m.status = val("mstatus");
+    m.sa = done ? val("msa") : ""; m.sb = done ? val("msb") : "";
+    [find(db.teams, a).captain, find(db.teams, b).captain].forEach(function (c, i, list) {
+        if (list.indexOf(c) == i) { note(c, "Match " + tn(a) + " vs " + tn(b) + " on " + m.date + " is " + m.status + "."); }
+    });
+    $("mid").value = $("mdate").value = $("msa").value = $("msb").value = "";
+    save(); showMatches(); msg("Match saved.");
+}
+
+function editMatch(id) {
+    var m = find(db.matches, id);
+    $("mid").value = id; $("ma").value = m.a; $("mb").value = m.b; $("mdate").value = m.date;
+    $("mstatus").value = m.status; $("msa").value = m.sa; $("msb").value = m.sb;
+    $("matchForm").scrollIntoView();
+}
+
+function delMatch(id) {
+    if (!confirm("Delete this match?")) { return; }
+    db.matches = db.matches.filter(function (m) { return m.id != id; });
+    save(); showMatches(); msg("Match deleted.");
+}
+
+// ===== REQUESTS: workflow, status and tracking =====
+function canReview(r) {
+    var t = find(db.teams, r.tid);
+    return me.role == "admin" || (r.type == "Join Team" && t && t.captain == me.id);
+}
+function myRequests() { return db.requests.filter(function (r) { return r.uid == me.id || canReview(r); }); }
+
+// can this person change request r to status s?
+function canDo(r, s) {
+    if (!next[r.status] || next[r.status].indexOf(s) < 0) { return false; }
+    if (s == "Completed" && r.type != "Venue Booking") { return false; }
+    return canReview(r) || (s == "Cancelled" && r.uid == me.id);
+}
+
+function clash(r) {
+    return db.requests.some(function (o) {
+        return o.id != r.id && o.type == "Venue Booking" && o.venue == r.venue && o.date == r.date && (o.status == "Approved" || o.status == "Completed");
+    });
+}
+
+function showQForm() {
+    var join = val("qtype") == "Join Team";
+    $("qteam").innerHTML = opts(db.teams.filter(function (t) {
+        return join ? t.members.indexOf(me.id) < 0 : (me.role == "admin" || t.captain == me.id);
+    }).map(function (t) { return [t.id, t.name]; }));
+    $("bookBox").style.display = join ? "none" : "block";
+    $("qdate").min = today();
+}
+
+function sendRequest() {
+    var r = {type: val("qtype"), tid: Number(val("qteam")), venue: val("qvenue"), date: val("qdate")};
+    if (!r.tid) { return fail("No team available for this request."); }
+    if (r.type == "Venue Booking") {
+        if (!r.date || r.date < today()) { return fail("Choose a booking date from today onward."); }
+        if (clash(r)) { return fail("That venue is already booked on this date."); }
+    }
+    addRequest(r);
+}
+
+function addRequest(r) {
+    var again = db.requests.some(function (o) { return r.type == "Join Team" && o.type == r.type && o.uid == me.id && o.tid == r.tid && next[o.status]; });
+    if (again) { return fail("You already sent this request."); }
+    r.id = db.id++; r.uid = me.id; r.status = "Pending";
+    r.log = ["Pending (" + me.name + ", " + today() + ")"];
+    db.requests.push(r);
+    var t = find(db.teams, r.tid);
+    db.users.forEach(function (u) {
+        if (u.id != me.id && (u.role == "admin" || (r.type == "Join Team" && t && t.captain == u.id))) {
+            note(u.id, "New request #" + r.id + " (" + r.type + ") from " + me.name + ".");
+        }
+    });
+    save(); go("requests"); msg("Request #" + r.id + " sent. Status: Pending.");
+}
+
+function showRequests() {
+    var q = val("qq").toLowerCase(), s = val("qf");
+    $("requestList").innerHTML = table(["#", "Type", "Team", "Details", "By", "Status", "History", "Actions"],
+        myRequests().reverse().filter(function (r) {
+            return (!s || r.status == s) && (r.id + r.type + tn(r.tid) + who(r.uid)).toLowerCase().indexOf(q) >= 0;
+        }).map(function (r) {
+            var b = (next[r.status] || []).filter(function (s) { return canDo(r, s); }).map(function (s) {
+                return btn({Approved: "Approve", Rejected: "Reject", Completed: "Complete", Cancelled: "Cancel"}[s], "setStatus(" + r.id + ",'" + s + "')", s == "Approved" || s == "Completed" ? "" : "red");
+            }).join("");
+            var details = r.type == "Venue Booking" ? safe(r.venue) + ", " + r.date : "-";
+            return [r.id, r.type, tn(r.tid), details, who(r.uid), tag("b", r.status, 'class="' + r.status + '"'), safe(r.log.join(" > ")), b];
+        }));
+}
+
+function setStatus(id, s) {
+    var r = find(db.requests, id);
+    if (!r || !canDo(r, s)) { return fail("You cannot do that."); }
+    if (s == "Approved" && r.type == "Venue Booking" && clash(r)) { return fail("That slot is already approved for someone else."); }
+    var t = find(db.teams, r.tid);
+    if (s == "Approved" && r.type == "Join Team" && t && t.members.indexOf(r.uid) < 0) { t.members.push(r.uid); }
+    r.status = s;
+    r.log.push(s + " (" + me.name + ", " + today() + ")");
+    if (r.uid != me.id) { note(r.uid, "Your request #" + r.id + " (" + r.type + ") is now " + s + "."); }
+    save(); showRequests(); $("bell").textContent = unread() || ""; msg("Request #" + id + " is now " + s + ".");
+}
+
+// ===== REPORTS (a progress bar for each value) =====
+function bars(title, names, list, field) {
+    return tag("div", tag("h3", title) + names.map(function (n) {
+        var c = list.filter(function (x) { return x[field] == n; }).length;
+        return tag("p", n + " (" + c + ") " + tag("progress", "", 'value="' + c + '" max="' + Math.max(list.length, 1) + '"'));
+    }).join(""), 'class="box"');
+}
+function showReports() {
+    $("p_reports").innerHTML = bars("Teams per sport", sports, db.teams, "sport") +
+        bars("Requests by status", statuses, db.requests, "status") +
+        bars("Matches by status", ["Scheduled", "Completed"], db.matches, "status");
+}
+
+// ===== NOTIFICATIONS =====
+function showAlerts() {
+    var mine = db.notes.filter(function (n) { return n.uid == me.id; }).reverse();
+    $("p_alerts").innerHTML = tag("div", tag("h2", "Notifications") +
+        (mine.map(function (n) { return tag("p", (n.read ? "" : "🔵 ") + safe(n.text) + " - " + n.time); }).join("") || "No notifications yet."), 'class="box"');
+    mine.forEach(function (n) { n.read = true; });
+    save();
+}
+
+// ===== START =====
+$("tsport").innerHTML = opts(sports);
+$("ts").innerHTML = all("All sports", sports);
+$("mstatus").innerHTML = opts(["Scheduled", "Completed"]);
+$("mf").innerHTML = all("All statuses", ["Scheduled", "Completed"]);
+$("qvenue").innerHTML = opts(venues);
+$("qf").innerHTML = all("All statuses", statuses);
+if (db.login) { me = find(db.users, db.login) || null; }
+if (me) { start(); }
+    </script>
+</body>
+</html>
